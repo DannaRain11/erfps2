@@ -48,6 +48,12 @@ pub struct Config {
 
     pub log_sp_effects: bool,
 
+    /// Maximum (yaw, pitch) in radians the locked camera may turn away from the aim direction.
+    pub rotation_lock_aim_limit: Option<(f32, f32)>,
+
+    /// Maximum (yaw, pitch) in radians the locked camera may turn away from a locked on target.
+    pub rotation_lock_target_limit: Option<(f32, f32)>,
+
     pub crosshair: CrosshairKind,
 
     pub crosshair_scale: (f32, f32),
@@ -88,6 +94,27 @@ impl From<toml::Config> for Config {
         let attach_dummy_id = config.camera.attach_dummy_id;
         let wobble = config.camera.wobble.clamp(0.0, 3.0);
 
+        // NaN safe: f32::max/min return the non-NaN argument.
+        let rotation_limit = |enabled: bool, x: f32, y: f32| {
+            enabled.then(|| {
+                (
+                    x.max(0.0).min(180.0).to_radians(),
+                    y.max(0.0).min(90.0).to_radians(),
+                )
+            })
+        };
+
+        let rotation_lock_aim_limit = rotation_limit(
+            config.camera.rotation_lock_aim_limit,
+            config.camera.rotation_lock_aim_limit_x,
+            config.camera.rotation_lock_aim_limit_y,
+        );
+        let rotation_lock_target_limit = rotation_limit(
+            config.camera.rotation_lock_target_limit,
+            config.camera.rotation_lock_target_limit_x,
+            config.camera.rotation_lock_target_limit_y,
+        );
+
         let crosshair_scale_x = config.crosshair.scale_x.clamp(0.1, 4.0);
         let crosshair_scale_y = config.crosshair.scale_y.clamp(0.1, 4.0);
 
@@ -121,6 +148,8 @@ impl From<toml::Config> for Config {
             wobble,
             rotation_lock_sp_effects: config.camera.rotation_lock_sp_effects,
             log_sp_effects: config.camera.log_sp_effects,
+            rotation_lock_aim_limit,
+            rotation_lock_target_limit,
             crosshair: config.crosshair.kind,
             crosshair_scale: (crosshair_scale_x, crosshair_scale_y),
             use_fov_correction,

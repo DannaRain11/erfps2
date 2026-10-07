@@ -96,6 +96,34 @@ rotation_lock_sp_effects = []
 # Turn this on, perform the action, then read the log to find its SpEffect IDs.
 log_sp_effects = false
 
+# Limits how far the camera may turn away from where you are aiming (your cursor or stick
+# direction) while a rotation_lock_sp_effects effect is active. Without a limit the camera
+# follows the character completely, which can leave you looking at the ground or away from
+# your target for the whole animation.
+rotation_lock_aim_limit = false
+
+# Horizontal (X) limit in degrees, to the left and to the right of your aim.
+# 0 keeps the camera fixed on your aim horizontally. 180 means no limit.
+# Possible value range: 0.0 - 180.0
+rotation_lock_aim_limit_x = 90.0
+
+# Vertical (Y) limit in degrees, above and below your aim.
+# 0 keeps the camera fixed on your aim vertically. 90 means no limit.
+# Possible value range: 0.0 - 90.0
+rotation_lock_aim_limit_y = 30.0
+
+# The same limits, used instead of the aim limits while you are locked on to an enemy
+# (with the default hard lock on, the camera is aimed at the target, so these are the angles
+# your view may turn away from the target). With soft_lock_on enabled the aim limits are
+# always used, since the camera is not aimed at the target.
+rotation_lock_target_limit = false
+
+# Possible value range: 0.0 - 180.0
+rotation_lock_target_limit_x = 60.0
+
+# Possible value range: 0.0 - 90.0
+rotation_lock_target_limit_y = 25.0
+
 [crosshair]
 # Crosshair in first person.
 # Possible values: "none", "cross", "dot", "circle", "circledot", "angled"

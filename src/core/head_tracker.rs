@@ -1,5 +1,7 @@
 use fromsoftware_shared::F32ModelMatrix;
-use glam::{Mat4, Quat, Vec3};
+use std::f32::consts::{PI, TAU};
+
+use glam::{EulerRot, Mat4, Quat, Vec3};
 
 use crate::{
     core::{
@@ -16,6 +18,9 @@ pub struct HeadTracker {
     rotation_target: Quat,
     stabilizer: CameraStabilizer,
     output: Option<Output>,
+    was_locked: bool,
+    yaw_unwrapped: f32,
+    last_yaw: f32,
 }
 
 pub struct Args {
@@ -26,6 +31,7 @@ pub struct Args {
     pub wobble: f32,
     pub is_tracked: bool,
     pub lock_rotation: bool,
+    pub rotation_limit: Option<(f32, f32)>,
 }
 
 pub struct Output {
@@ -37,6 +43,32 @@ pub struct Output {
 impl HeadTracker {
     pub fn set_stabilizer_window(&mut self, window: f32) {
         self.stabilizer.set_window(window);
+    }
+
+    /// Follows the attachment point's rotation exactly, without easing, optionally keeping the
+    /// view within `limit` (yaw, pitch in radians) of the direction the camera is aimed in.
+    fn lock_rotation(&mut self, limit: Option<(f32, f32)>) {
+        let Some((max_yaw, max_pitch)) = limit else {
+            self.rotation = self.rotation_target;
+            return;
+        };
+
+        let (yaw, pitch, roll) = self.rotation_target.to_euler(EulerRot::YXZ);
+
+        // Track the yaw as a continuous angle, so a full turn is not mistaken for no turn.
+        if self.was_locked {
+            self.yaw_unwrapped += wrap_angle(yaw - self.last_yaw);
+        } else {
+            self.yaw_unwrapped = yaw;
+        }
+        self.last_yaw = yaw;
+
+        self.rotation = Quat::from_euler(
+            EulerRot::YXZ,
+            self.yaw_unwrapped.clamp(-max_yaw, max_yaw),
+            pitch.clamp(-max_pitch, max_pitch),
+            roll,
+        );
     }
 
     fn rotate_towards_target(&mut self, frame_time: f32) {
@@ -89,11 +121,12 @@ impl FrameCache for HeadTracker {
         self.last = Some(input);
 
         if args.lock_rotation {
-            // Follow the attachment point's rotation exactly, without easing.
-            self.rotation = self.rotation_target;
+            self.lock_rotation(args.rotation_limit);
         } else {
             self.rotate_towards_target(frame_time);
         }
+
+        self.was_locked = args.lock_rotation;
 
         self.output.insert(Output {
             tracking_rotation: self.rotation,
@@ -109,6 +142,7 @@ impl FrameCache for HeadTracker {
     fn reset(&mut self) {
         self.stabilizer.reset();
         self.last = None;
+        self.was_locked = false;
     }
 }
 
@@ -125,6 +159,13 @@ impl From<&CoreLogicContext<'_, World<'_>>> for Args {
             .player
             .has_any_sp_effect(&context.config.rotation_lock_sp_effects);
 
+        // With the hard lock on the camera is aimed at the target, so the angles are relative to it.
+        let rotation_limit = if context.lock_tgt.is_locked_on && !context.config.soft_lock_on {
+            context.config.rotation_lock_target_limit
+        } else {
+            context.config.rotation_lock_aim_limit
+        };
+
         let is_tracked = lock_rotation
             || context.player.is_in_throw()
             || (context.config.track_damage && context.has_state(BehaviorState::Damage))
@@ -138,8 +179,14 @@ impl From<&CoreLogicContext<'_, World<'_>>> for Args {
             wobble: context.config.wobble,
             is_tracked,
             lock_rotation,
+            rotation_limit,
         }
     }
+}
+
+/// Wraps an angle in radians to the range `[-PI, PI)`.
+fn wrap_angle(angle: f32) -> f32 {
+    (angle + PI).rem_euclid(TAU) - PI
 }
 
 /**
