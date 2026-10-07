@@ -1,6 +1,4 @@
 use fromsoftware_shared::F32ModelMatrix;
-use std::f32::consts::{PI, TAU};
-
 use glam::{EulerRot, Mat4, Quat, Vec3};
 
 use crate::{
@@ -19,8 +17,9 @@ pub struct HeadTracker {
     stabilizer: CameraStabilizer,
     output: Option<Output>,
     was_locked: bool,
-    yaw_unwrapped: f32,
-    last_yaw: f32,
+    engaged: bool,
+    blend: f32,
+    anchor: Quat,
 }
 
 pub struct Args {
@@ -31,7 +30,8 @@ pub struct Args {
     pub wobble: f32,
     pub is_tracked: bool,
     pub lock_rotation: bool,
-    pub rotation_limit: Option<(f32, f32)>,
+    pub rotation_range: Option<(f32, f32)>,
+    pub range_blend: f32,
 }
 
 pub struct Output {
@@ -45,30 +45,62 @@ impl HeadTracker {
         self.stabilizer.set_window(window);
     }
 
-    /// Follows the attachment point's rotation exactly, without easing, optionally keeping the
-    /// view within `limit` (yaw, pitch in radians) of the direction the camera is aimed in.
-    fn lock_rotation(&mut self, limit: Option<(f32, f32)>) {
-        let Some((max_yaw, max_pitch)) = limit else {
+    /// Follows the attachment point's rotation exactly, without easing.
+    ///
+    /// With a `range` (yaw, pitch in radians) the camera only follows while the attachment point
+    /// has turned no further than the range from where it started. Outside of it the camera
+    /// returns to the fixed direction it is aimed in, and follows again once the attachment
+    /// point is back within the range.
+    fn lock_rotation(&mut self, frame_time: f32, range: Option<(f32, f32)>, blend_time: f32) {
+        let Some((max_yaw, max_pitch)) = range else {
+            self.engaged = true;
+            self.blend = 1.0;
+            self.anchor = self.rotation_target;
             self.rotation = self.rotation_target;
             return;
         };
 
-        let (yaw, pitch, roll) = self.rotation_target.to_euler(EulerRot::YXZ);
-
-        // Track the yaw as a continuous angle, so a full turn is not mistaken for no turn.
-        if self.was_locked {
-            self.yaw_unwrapped += wrap_angle(yaw - self.last_yaw);
-        } else {
-            self.yaw_unwrapped = yaw;
+        if !self.was_locked {
+            self.engaged = true;
+            self.blend = 1.0;
+            self.anchor = self.rotation_target;
         }
-        self.last_yaw = yaw;
 
-        self.rotation = Quat::from_euler(
-            EulerRot::YXZ,
-            self.yaw_unwrapped.clamp(-max_yaw, max_yaw),
-            pitch.clamp(-max_pitch, max_pitch),
-            roll,
-        );
+        let (yaw, pitch, _) = self.rotation_target.to_euler(EulerRot::YXZ);
+
+        // Rejoining the range requires being slightly inside of it, which stops the camera
+        // from flickering when the attachment point hovers on its edge.
+        let margin = if self.engaged { 0.0 } else { RANGE_HYSTERESIS };
+
+        let in_range = yaw.abs() <= (max_yaw - margin).max(0.0)
+            && pitch.abs() <= (max_pitch - margin).max(0.0);
+
+        self.engaged = in_range;
+
+        // While leaving the range the camera blends out of the last rotation that was in range.
+        if in_range {
+            self.anchor = self.rotation_target;
+        }
+
+        let step = if blend_time > 0.0 {
+            frame_time / blend_time
+        } else {
+            1.0
+        };
+
+        self.blend = if in_range {
+            (self.blend + step).min(1.0)
+        } else {
+            (self.blend - step).max(0.0)
+        };
+
+        self.rotation = if self.blend >= 1.0 {
+            self.anchor
+        } else if self.blend <= 0.0 {
+            Quat::IDENTITY
+        } else {
+            Quat::IDENTITY.slerp(self.anchor, self.blend)
+        };
     }
 
     fn rotate_towards_target(&mut self, frame_time: f32) {
@@ -121,7 +153,7 @@ impl FrameCache for HeadTracker {
         self.last = Some(input);
 
         if args.lock_rotation {
-            self.lock_rotation(args.rotation_limit);
+            self.lock_rotation(frame_time, args.rotation_range, args.range_blend);
         } else {
             self.rotate_towards_target(frame_time);
         }
@@ -159,11 +191,11 @@ impl From<&CoreLogicContext<'_, World<'_>>> for Args {
             .player
             .has_any_sp_effect(&context.config.rotation_lock_sp_effects);
 
-        // With the hard lock on the camera is aimed at the target, so the angles are relative to it.
-        let rotation_limit = if context.lock_tgt.is_locked_on && !context.config.soft_lock_on {
-            context.config.rotation_lock_target_limit
+        // With the hard lock on the camera is aimed at the target, so the range is relative to it.
+        let rotation_range = if context.lock_tgt.is_locked_on && !context.config.soft_lock_on {
+            context.config.rotation_lock_target_range
         } else {
-            context.config.rotation_lock_aim_limit
+            context.config.rotation_lock_aim_range
         };
 
         let is_tracked = lock_rotation
@@ -179,15 +211,14 @@ impl From<&CoreLogicContext<'_, World<'_>>> for Args {
             wobble: context.config.wobble,
             is_tracked,
             lock_rotation,
-            rotation_limit,
+            rotation_range,
+            range_blend: context.config.rotation_lock_range_blend,
         }
     }
 }
 
-/// Wraps an angle in radians to the range `[-PI, PI)`.
-fn wrap_angle(angle: f32) -> f32 {
-    (angle + PI).rem_euclid(TAU) - PI
-}
+/// How far (in radians) inside of the tracking range the camera has to be to rejoin it.
+const RANGE_HYSTERESIS: f32 = 2.0 * std::f32::consts::PI / 180.0;
 
 /**
     Computes a signed distance step that moves `distance` toward 0 over the next `timedelta`.

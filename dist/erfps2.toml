@@ -96,33 +96,42 @@ rotation_lock_sp_effects = []
 # Turn this on, perform the action, then read the log to find its SpEffect IDs.
 log_sp_effects = false
 
-# Limits how far the camera may turn away from where you are aiming (your cursor or stick
-# direction) while a rotation_lock_sp_effects effect is active. Without a limit the camera
-# follows the character completely, which can leave you looking at the ground or away from
-# your target for the whole animation.
-rotation_lock_aim_limit = false
+# Tracking range for rotation_lock_sp_effects. With this enabled the camera only follows the
+# character while the character has turned no further than the range below from where it was
+# facing when the effect began (your aim, or your target when locked on). Once the character
+# turns further away, for example during a spin, the camera returns to the fixed direction you
+# are aiming in and stays there until the character is back within the range, then follows again.
+# Without a range the camera follows the character completely, which can leave you looking at
+# the ground or away from your target for the whole animation.
+rotation_lock_aim_range = false
 
-# Horizontal (X) limit in degrees, to the left and to the right of your aim.
-# 0 keeps the camera fixed on your aim horizontally. 180 means no limit.
+# Horizontal (X) range in degrees, to the left and to the right of the aim.
+# 0 never follows horizontally. 180 means the camera always follows.
 # Possible value range: 0.0 - 180.0
-rotation_lock_aim_limit_x = 90.0
+rotation_lock_aim_range_x = 90.0
 
-# Vertical (Y) limit in degrees, above and below your aim.
-# 0 keeps the camera fixed on your aim vertically. 90 means no limit.
+# Vertical (Y) range in degrees, above and below the aim.
+# 0 never follows vertically. 90 means the camera always follows.
 # Possible value range: 0.0 - 90.0
-rotation_lock_aim_limit_y = 30.0
+rotation_lock_aim_range_y = 30.0
 
-# The same limits, used instead of the aim limits while you are locked on to an enemy
-# (with the default hard lock on, the camera is aimed at the target, so these are the angles
-# your view may turn away from the target). With soft_lock_on enabled the aim limits are
-# always used, since the camera is not aimed at the target.
-rotation_lock_target_limit = false
+# The same range, used instead of the aim range while you are locked on to an enemy
+# (with the default hard lock on the camera is aimed at the target, so this is the range around
+# the target). With soft_lock_on enabled the aim range is always used, since the camera is not
+# aimed at the target.
+rotation_lock_target_range = false
 
 # Possible value range: 0.0 - 180.0
-rotation_lock_target_limit_x = 60.0
+rotation_lock_target_range_x = 60.0
 
 # Possible value range: 0.0 - 90.0
-rotation_lock_target_limit_y = 25.0
+rotation_lock_target_range_y = 25.0
+
+# The time in seconds the camera takes to leave the range (return to the fixed direction) and
+# to rejoin it. 0 snaps instantly. Small values (0.03 - 0.1) soften the snap, but during fast
+# spins the character crosses the range so quickly that larger values hide most of the tracking.
+# Possible value range: 0.0 - 1.0
+rotation_lock_range_blend = 0.0
 
 [crosshair]
 # Crosshair in first person.

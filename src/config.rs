@@ -48,11 +48,14 @@ pub struct Config {
 
     pub log_sp_effects: bool,
 
-    /// Maximum (yaw, pitch) in radians the locked camera may turn away from the aim direction.
-    pub rotation_lock_aim_limit: Option<(f32, f32)>,
+    /// (yaw, pitch) in radians around the aim direction in which the locked camera tracks.
+    pub rotation_lock_aim_range: Option<(f32, f32)>,
 
-    /// Maximum (yaw, pitch) in radians the locked camera may turn away from a locked on target.
-    pub rotation_lock_target_limit: Option<(f32, f32)>,
+    /// (yaw, pitch) in radians around a locked on target in which the locked camera tracks.
+    pub rotation_lock_target_range: Option<(f32, f32)>,
+
+    /// Time in seconds the camera takes to leave or rejoin the tracking range.
+    pub rotation_lock_range_blend: f32,
 
     pub crosshair: CrosshairKind,
 
@@ -95,7 +98,7 @@ impl From<toml::Config> for Config {
         let wobble = config.camera.wobble.clamp(0.0, 3.0);
 
         // NaN safe: f32::max/min return the non-NaN argument.
-        let rotation_limit = |enabled: bool, x: f32, y: f32| {
+        let rotation_range = |enabled: bool, x: f32, y: f32| {
             enabled.then(|| {
                 (
                     x.max(0.0).min(180.0).to_radians(),
@@ -104,15 +107,15 @@ impl From<toml::Config> for Config {
             })
         };
 
-        let rotation_lock_aim_limit = rotation_limit(
-            config.camera.rotation_lock_aim_limit,
-            config.camera.rotation_lock_aim_limit_x,
-            config.camera.rotation_lock_aim_limit_y,
+        let rotation_lock_aim_range = rotation_range(
+            config.camera.rotation_lock_aim_range,
+            config.camera.rotation_lock_aim_range_x,
+            config.camera.rotation_lock_aim_range_y,
         );
-        let rotation_lock_target_limit = rotation_limit(
-            config.camera.rotation_lock_target_limit,
-            config.camera.rotation_lock_target_limit_x,
-            config.camera.rotation_lock_target_limit_y,
+        let rotation_lock_target_range = rotation_range(
+            config.camera.rotation_lock_target_range,
+            config.camera.rotation_lock_target_range_x,
+            config.camera.rotation_lock_target_range_y,
         );
 
         let crosshair_scale_x = config.crosshair.scale_x.clamp(0.1, 4.0);
@@ -148,8 +151,9 @@ impl From<toml::Config> for Config {
             wobble,
             rotation_lock_sp_effects: config.camera.rotation_lock_sp_effects,
             log_sp_effects: config.camera.log_sp_effects,
-            rotation_lock_aim_limit,
-            rotation_lock_target_limit,
+            rotation_lock_aim_range,
+            rotation_lock_target_range,
+            rotation_lock_range_blend: config.camera.rotation_lock_range_blend.max(0.0).min(1.0),
             crosshair: config.crosshair.kind,
             crosshair_scale: (crosshair_scale_x, crosshair_scale_y),
             use_fov_correction,

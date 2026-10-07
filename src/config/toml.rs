@@ -53,12 +53,13 @@ pub struct Camera {
     pub wobble: f32,
     pub rotation_lock_sp_effects: Vec<i32>,
     pub log_sp_effects: bool,
-    pub rotation_lock_aim_limit: bool,
-    pub rotation_lock_aim_limit_x: f32,
-    pub rotation_lock_aim_limit_y: f32,
-    pub rotation_lock_target_limit: bool,
-    pub rotation_lock_target_limit_x: f32,
-    pub rotation_lock_target_limit_y: f32,
+    pub rotation_lock_aim_range: bool,
+    pub rotation_lock_aim_range_x: f32,
+    pub rotation_lock_aim_range_y: f32,
+    pub rotation_lock_target_range: bool,
+    pub rotation_lock_target_range_x: f32,
+    pub rotation_lock_target_range_y: f32,
+    pub rotation_lock_range_blend: f32,
 }
 
 impl Default for Camera {
@@ -68,12 +69,13 @@ impl Default for Camera {
             wobble: 1.0,
             rotation_lock_sp_effects: Vec::new(),
             log_sp_effects: false,
-            rotation_lock_aim_limit: false,
-            rotation_lock_aim_limit_x: 90.0,
-            rotation_lock_aim_limit_y: 30.0,
-            rotation_lock_target_limit: false,
-            rotation_lock_target_limit_x: 60.0,
-            rotation_lock_target_limit_y: 25.0,
+            rotation_lock_aim_range: false,
+            rotation_lock_aim_range_x: 90.0,
+            rotation_lock_aim_range_y: 30.0,
+            rotation_lock_target_range: false,
+            rotation_lock_target_range_x: 60.0,
+            rotation_lock_target_range_y: 25.0,
+            rotation_lock_range_blend: 0.0,
         }
     }
 }
