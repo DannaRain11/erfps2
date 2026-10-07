@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use eldenring::{
     cs::{
         CSModelIns, ChrAsmArmStyle, ChrIns, ChrMovementLimit, LadderState, PlayerIns,
@@ -21,7 +23,7 @@ pub trait PlayerExt {
 
     fn model_matrix(&self) -> F32ModelMatrix;
 
-    fn head_matrix(&self) -> F32ModelMatrix;
+    fn head_matrix(&self, dummy_id: u32) -> F32ModelMatrix;
 
     fn location_entity_matrix_mut(&mut self) -> &mut F32ModelMatrix;
 
@@ -46,6 +48,10 @@ pub trait PlayerExt {
     fn has_action_request(&self) -> bool;
 
     fn is_sprinting(&self) -> bool;
+
+    fn has_any_sp_effect(&self, ids: &[i32]) -> bool;
+
+    fn log_sp_effect_changes(&self);
 
     fn is_sprint_requested(&self) -> bool;
 
@@ -74,7 +80,7 @@ impl PlayerExt for PlayerIns {
         m
     }
 
-    fn head_matrix(&self) -> F32ModelMatrix {
+    fn head_matrix(&self, dummy_id: u32) -> F32ModelMatrix {
         type GetDmyPos = unsafe extern "C" fn(
             *const ChrIns,
             *mut F32ModelMatrix,
@@ -82,13 +88,13 @@ impl PlayerExt for PlayerIns {
             i32,
         ) -> *mut F32Vector4;
 
-        // Fetch a model matrix for the head dummy poly in world space.
-        const HEAD_DMY_ID: u32 = 907;
+        // Fetch a model matrix for the camera attachment dummy poly in world space.
+        // 907 is the head dummy poly.
         unsafe {
             let get_dmy_pos = Program::current().derva_ptr::<GetDmyPos>(GET_DMY_POS_RVA);
 
             let mut dmy_pos = F32ModelMatrix::IDENTITY;
-            get_dmy_pos(&**self, &mut dmy_pos, &HEAD_DMY_ID, 1);
+            get_dmy_pos(&**self, &mut dmy_pos, &dummy_id, 1);
 
             dmy_pos
         }
@@ -235,6 +241,46 @@ impl PlayerExt for PlayerIns {
         self.special_effect
             .entries()
             .any(|sp_effect| sp_effect.param_id == 100002)
+    }
+
+    fn has_any_sp_effect(&self, ids: &[i32]) -> bool {
+        !ids.is_empty()
+            && self
+                .special_effect
+                .entries()
+                .any(|sp_effect| ids.contains(&sp_effect.param_id))
+    }
+
+    fn log_sp_effect_changes(&self) {
+        static LAST: Mutex<Vec<i32>> = Mutex::new(Vec::new());
+
+        let mut current: Vec<i32> = self
+            .special_effect
+            .entries()
+            .map(|sp_effect| sp_effect.param_id)
+            .collect();
+        current.sort_unstable();
+
+        let Ok(mut last) = LAST.lock() else {
+            return;
+        };
+
+        if *last != current {
+            let added: Vec<i32> = current
+                .iter()
+                .copied()
+                .filter(|id| !last.contains(id))
+                .collect();
+            let removed: Vec<i32> = last
+                .iter()
+                .copied()
+                .filter(|id| !current.contains(id))
+                .collect();
+
+            log::info!("player SpEffects added: {added:?}, removed: {removed:?}");
+
+            *last = current;
+        }
     }
 
     fn is_sprint_requested(&self) -> bool {

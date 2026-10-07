@@ -71,6 +71,31 @@ smoothing_window = 0.3
 # Possible value range: 0.0 - 1.0
 smoothing_factor = 0.8
 
+[camera]
+# The dummy polygon (attachment point) on the player model the first person camera follows.
+# 907 is the head. Other IDs can be found by inspecting the player model (c0000) in a tool like DSAnimStudio.
+# An ID that does not exist on the model will break the camera.
+attach_dummy_id = 907
+
+# How strongly the camera follows the small translational movements of the attachment point
+# (walking and running bob, breathing, animation sway) relative to their moving average.
+# 1.0 follows the point exactly as smoothed by the stabilizer, 0.0 removes the movement entirely,
+# values above 1.0 exaggerate it. Camera rotation is not affected.
+# For raw, unsmoothed following disable the stabilizer.
+# Possible value range: 0.0 - 3.0
+wobble = 1.0
+
+# SpEffect IDs that lock the first person camera's rotation to the attachment point's rotation.
+# While any of these SpEffects is active on the player, the camera turns together with the
+# character (for example during spinning ashes of war), without the usual easing delay.
+# When the SpEffect ends the camera eases back to the direction you were looking in.
+# Use log_sp_effects below to find the IDs. Example: rotation_lock_sp_effects = [12345, 67890]
+rotation_lock_sp_effects = []
+
+# Writes the SpEffects added to and removed from the player to erfps2.log.
+# Turn this on, perform the action, then read the log to find its SpEffect IDs.
+log_sp_effects = false
+
 [crosshair]
 # Crosshair in first person.
 # Possible values: "none", "cross", "dot", "circle", "circledot", "angled"

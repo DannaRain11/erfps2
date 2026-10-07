@@ -9,6 +9,8 @@ pub struct Config {
     pub player: Player,
     pub stabilizer: Stabilizer,
     pub crosshair: Crosshair,
+    #[serde(default)]
+    pub camera: Camera,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +44,26 @@ pub struct Stabilizer {
     pub enabled: bool,
     pub smoothing_window: f32,
     pub smoothing_factor: f32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Camera {
+    pub attach_dummy_id: u32,
+    pub wobble: f32,
+    pub rotation_lock_sp_effects: Vec<i32>,
+    pub log_sp_effects: bool,
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
+            attach_dummy_id: 907,
+            wobble: 1.0,
+            rotation_lock_sp_effects: Vec::new(),
+            log_sp_effects: false,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

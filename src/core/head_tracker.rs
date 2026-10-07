@@ -23,7 +23,9 @@ pub struct Args {
     pub head_matrix: F32ModelMatrix,
     pub stabilizer_factor: f32,
     pub use_stabilizer: bool,
+    pub wobble: f32,
     pub is_tracked: bool,
+    pub lock_rotation: bool,
 }
 
 pub struct Output {
@@ -50,20 +52,28 @@ impl FrameCache for HeadTracker {
     type Output<'a> = &'a Output;
 
     fn update(&mut self, frame_time: f32, args: Self::Input) -> Self::Output<'_> {
-        let mut head_position = args.head_matrix.translation();
+        let head_position = args.head_matrix.translation();
+
+        let player_matrix = Mat4::from(args.model_matrix);
+
+        let raw_local_pos = player_matrix.inverse().project_point3(head_position);
+
+        // Moving average of the attachment point relative to the player model.
+        let average = self.stabilizer.update(frame_time, raw_local_pos);
+
+        let mut local_head_pos = raw_local_pos;
 
         if args.use_stabilizer {
-            let player_matrix = Mat4::from(args.model_matrix);
-
-            let mut local_head_pos = player_matrix.inverse().project_point3(head_position);
-
-            let stabilized = self.stabilizer.update(frame_time, local_head_pos);
-            let delta = stabilized - local_head_pos;
+            let delta = average - raw_local_pos;
 
             local_head_pos += delta.clamp_length_max(args.stabilizer_factor * 0.1);
-
-            head_position = player_matrix.project_point3(local_head_pos);
         }
+
+        // Scale the translational movement around its average.
+        // 1.0 leaves the position untouched, translation only: rotation is handled separately.
+        local_head_pos = average + (local_head_pos - average) * args.wobble;
+
+        let head_position = player_matrix.project_point3(local_head_pos);
 
         let input = Quat::from_mat3a(&args.head_matrix.rotation());
 
@@ -77,7 +87,13 @@ impl FrameCache for HeadTracker {
         }
 
         self.last = Some(input);
-        self.rotate_towards_target(frame_time);
+
+        if args.lock_rotation {
+            // Follow the attachment point's rotation exactly, without easing.
+            self.rotation = self.rotation_target;
+        } else {
+            self.rotate_towards_target(frame_time);
+        }
 
         self.output.insert(Output {
             tracking_rotation: self.rotation,
@@ -98,10 +114,19 @@ impl FrameCache for HeadTracker {
 
 impl From<&CoreLogicContext<'_, World<'_>>> for Args {
     fn from(context: &CoreLogicContext<'_, World<'_>>) -> Self {
-        let head_matrix = context.player.head_matrix();
+        let head_matrix = context.player.head_matrix(context.config.attach_dummy_id);
         let model_matrix = context.player.model_matrix();
 
-        let is_tracked = context.player.is_in_throw()
+        if context.config.log_sp_effects {
+            context.player.log_sp_effect_changes();
+        }
+
+        let lock_rotation = context
+            .player
+            .has_any_sp_effect(&context.config.rotation_lock_sp_effects);
+
+        let is_tracked = lock_rotation
+            || context.player.is_in_throw()
             || (context.config.track_damage && context.has_state(BehaviorState::Damage))
             || (context.config.track_dodges && context.has_state(BehaviorState::Evasion));
 
@@ -110,7 +135,9 @@ impl From<&CoreLogicContext<'_, World<'_>>> for Args {
             model_matrix,
             stabilizer_factor: context.config.stabilizer_factor,
             use_stabilizer: context.config.use_stabilizer,
+            wobble: context.config.wobble,
             is_tracked,
+            lock_rotation,
         }
     }
 }

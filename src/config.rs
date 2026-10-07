@@ -40,6 +40,14 @@ pub struct Config {
 
     pub stabilizer_factor: f32,
 
+    pub attach_dummy_id: u32,
+
+    pub wobble: f32,
+
+    pub rotation_lock_sp_effects: Vec<i32>,
+
+    pub log_sp_effects: bool,
+
     pub crosshair: CrosshairKind,
 
     pub crosshair_scale: (f32, f32),
@@ -77,6 +85,9 @@ impl From<toml::Config> for Config {
         let stabilizer_window = config.stabilizer.smoothing_window.clamp(0.1, 1.0);
         let stabilizer_factor = config.stabilizer.smoothing_factor.clamp(0.0, 1.0);
 
+        let attach_dummy_id = config.camera.attach_dummy_id;
+        let wobble = config.camera.wobble.clamp(0.0, 3.0);
+
         let crosshair_scale_x = config.crosshair.scale_x.clamp(0.1, 4.0);
         let crosshair_scale_y = config.crosshair.scale_y.clamp(0.1, 4.0);
 
@@ -106,6 +117,10 @@ impl From<toml::Config> for Config {
             use_stabilizer: config.stabilizer.enabled,
             stabilizer_window,
             stabilizer_factor,
+            attach_dummy_id,
+            wobble,
+            rotation_lock_sp_effects: config.camera.rotation_lock_sp_effects,
+            log_sp_effects: config.camera.log_sp_effects,
             crosshair: config.crosshair.kind,
             crosshair_scale: (crosshair_scale_x, crosshair_scale_y),
             use_fov_correction,
